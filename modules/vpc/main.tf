@@ -46,7 +46,7 @@ resource "aws_internet_gateway" "igw" {
 
 # NAT Gateway EIP
 resource "aws_eip" "nat" {
-  count = length(var.azs)
+  count = 1
   vpc   = true
 
   tags = merge(var.tags, tomap({ "Name" = format("%s-nat-eip-%s", var.name, substr(var.azs[count.index], -2, -1)) }))
@@ -54,44 +54,48 @@ resource "aws_eip" "nat" {
 
 # NAT Gateway
 resource "aws_nat_gateway" "natgw" {
-  count = length(var.azs)
+  count = 1
 
-  subnet_id     = aws_subnet.pub.*.id[count.index]
-  allocation_id = aws_eip.nat.*.id[count.index]
+  subnet_id     = aws_subnet.pub.*.id[0]
+  allocation_id = aws_eip.nat.*.id[0]
 
   tags = merge(var.tags, tomap({ "Name" = format("%s-vpc-nat-%s", var.name, substr(var.azs[count.index], -2, -1))}))
 
   depends_on = [aws_internet_gateway.igw]
 }
 
-# Route tables
+# # Route tables
 resource "aws_route_table" "pub" {
-  count = length(var.public_subnets)
+  count = 1
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
-  tags = merge(var.tags, tomap({ "Name" = format("%s-pub-rt-%s", var.name, substr(var.azs[count.index], -2, -1))}))
+  tags = merge(var.tags, tomap({ "Name" = format("%s-pub-rt", var.name)}))
 }
 
 resource "aws_route_table" "pri" {
-  count = length(var.private_subnets)
+  count = 1
   vpc_id = aws_vpc.main.id
 
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = aws_nat_gateway.natgw.*.id[count.index]
+    gateway_id = aws_nat_gateway.natgw.*.id[0]
   }
-  tags = merge(var.tags, tomap({ "Name" = format("%s-pri-rt-%s", var.name, substr(var.azs[count.index], -2, -1))}))
+  tags = merge(var.tags, tomap({ "Name" = format("%s-pri-rt", var.name)}))
+
+    lifecycle {
+        ignore_changes = all
+  }
 }
 
 resource "aws_route_table" "res" {
-  count = length(var.restricted_subnets)
+  count = 1
   vpc_id = aws_vpc.main.id
 
-  tags = merge(var.tags, tomap({ "Name" = format("%s-res-rt-%s", var.name, substr(var.azs[count.index], -2, -1))}))
+  tags = merge(var.tags, tomap({ "Name" = format("%s-res-rt", var.name)}))
 }
 
 # Route Tables association
@@ -99,19 +103,19 @@ resource "aws_route_table_association" "pub" {
   count = length(var.public_subnets)
 
   subnet_id      = aws_subnet.pub.*.id[count.index]
-  route_table_id = aws_route_table.pub.*.id[count.index]  
+  route_table_id = aws_route_table.pub.*.id[0]
 }
 
 resource "aws_route_table_association" "pri" {
   count = length(var.private_subnets)
 
   subnet_id      = aws_subnet.pri.*.id[count.index]
-  route_table_id = aws_route_table.pri.*.id[count.index]  
+  route_table_id = aws_route_table.pri.*.id[0]
 }
 
 resource "aws_route_table_association" "res" {
   count = length(var.restricted_subnets)
 
   subnet_id      = aws_subnet.res.*.id[count.index]
-  route_table_id = aws_route_table.res.*.id[count.index]  
+  route_table_id = aws_route_table.res.*.id[0]
 }
